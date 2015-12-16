@@ -2,16 +2,13 @@ import asyncio
 
 
 class FilePoller:
-    def __init__(self, path, input=None):
+    def __init__(self, path):
         self.path = path
-        self.input = input
 
     async def __aiter__(self):
         return self
 
     async def __anext__(self):
-        if self.input:
-            _ = await self.input.__anext__()
         content = open(self.path).read().strip()
         return content
 

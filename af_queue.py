@@ -1,7 +1,7 @@
 import asyncio
 
 
-async def poll_file(out_, path, delay=0.5):
+async def poll_file(out_, path):
     """
     Events source.
     :param out_: Queue object of output stream
@@ -9,9 +9,32 @@ async def poll_file(out_, path, delay=0.5):
     :param delay: periodic polling delay
     """
     while True:
-        await asyncio.sleep(delay)
         content = open(path).read().strip()
         await out_.put(content)
+
+
+async def tick(out_, delay):
+    """
+    Timer event source. Returns 1 every `delay` seconds
+    :param out_: output Queue
+    :param delay: period in seconds
+    """
+    while True:
+        await asyncio.sleep(delay)
+        await out_.put(1)
+
+
+async def stream_zip(*streams, out_):
+    """
+    Returns tuples of values from all streams
+    :param in_: input Queue
+    :param out_: stream if distinct values
+    """
+    while True:
+        l = []
+        for i in streams:  # TODO: rewrite async
+            l.append(await i.get())
+        await out_.put(tuple(l))
 
 
 async def distinct(in_, out_):
@@ -43,11 +66,14 @@ async def print_stream(in_, out_=None):
 
 def main():
     loop = asyncio.get_event_loop()
-    q = asyncio.Queue()
-    q1 = asyncio.Queue()
-    q2 = asyncio.Queue()
-    loop.create_task(poll_file(q, '/sys/class/thermal/thermal_zone0/temp'))
-    loop.create_task(distinct(q, q1))
+    q_temp = asyncio.Queue(maxsize=1)
+    q_ticks = asyncio.Queue()
+    q_zip = asyncio.Queue()
+    q1, q2 = asyncio.Queue(), asyncio.Queue()
+    loop.create_task(poll_file(q_temp, '/sys/class/thermal/thermal_zone0/temp'))
+    loop.create_task(tick(q_ticks, 0.5))
+    loop.create_task(stream_zip(q_ticks, q_temp, out_=q_zip))
+    loop.create_task(distinct(q_zip, q1))
     loop.create_task(print_stream(q1, q2))
     loop.run_forever()
 
